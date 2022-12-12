@@ -10,6 +10,9 @@
         android:name="ru.ey.samarin.client.ui.main.FirstFragment"
         android:label="@string/first_fragment_label"
         tools:layout="@layout/fragment_first">
-
+        <argument
+            android:name="myArg"
+            app:argType="string"
+            android:defaultValue="" />
     </fragment>
 </navigation>

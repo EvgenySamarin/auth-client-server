@@ -13,8 +13,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.Toast
 import ru.ey.samarin.client.databinding.ActivityLoginBinding
-
-import ru.ey.samarin.client.R
+import ru.ey.samarin.client.ui.main.FirstFragment.Companion.ARG_LOGIN_RESULT
 import ru.ey.samarin.client.ui.main.MainActivity
 
 class LoginActivity : AppCompatActivity() {
@@ -58,9 +57,8 @@ class LoginActivity : AppCompatActivity() {
                 showLoginFailed(loginResult.error)
             }
             if (loginResult.success != null) {
-                updateUiWithUser(loginResult.success)
+                handleLoginSuccess(loginResult.success)
             }
-            startActivity(Intent(this, MainActivity::class.java))
 
             //Complete and destroy login activity once successful
             finish()
@@ -99,15 +97,10 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateUiWithUser(model: LoggedInUserView) {
-        val welcome = getString(R.string.welcome)
-        val displayName = model.displayName
-        // TODO : initiate successful logged in experience
-        Toast.makeText(
-            applicationContext,
-            "$welcome $displayName",
-            Toast.LENGTH_LONG
-        ).show()
+    private fun handleLoginSuccess(model: LoggedInUserView) {
+        startActivity(Intent(this, MainActivity::class.java).also {
+            it.putExtra(ARG_LOGIN_RESULT, model.displayName)
+        })
     }
 
     private fun showLoginFailed(@StringRes errorString: Int) {
