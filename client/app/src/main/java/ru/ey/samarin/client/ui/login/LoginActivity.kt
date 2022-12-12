@@ -1,6 +1,6 @@
 package ru.ey.samarin.client.ui.login
 
-import android.app.Activity
+import android.content.Intent
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
@@ -15,6 +15,7 @@ import android.widget.Toast
 import ru.ey.samarin.client.databinding.ActivityLoginBinding
 
 import ru.ey.samarin.client.R
+import ru.ey.samarin.client.ui.main.MainActivity
 
 class LoginActivity : AppCompatActivity() {
 
@@ -59,7 +60,7 @@ class LoginActivity : AppCompatActivity() {
             if (loginResult.success != null) {
                 updateUiWithUser(loginResult.success)
             }
-            setResult(Activity.RESULT_OK)
+            startActivity(Intent(this, MainActivity::class.java))
 
             //Complete and destroy login activity once successful
             finish()
