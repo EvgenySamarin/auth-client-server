@@ -2,11 +2,16 @@ package ru.ey.samarin.client.data
 
 import ru.ey.samarin.client.data.model.LoggedInUser
 import java.io.IOException
+import javax.inject.Inject
 
 /**
  * Class that handles authentication w/ login credentials and retrieves user information.
  */
-class LoginDataSource {
+class LoginDataSource @Inject constructor(
+    private val loginApi: LoginApi
+) {
+
+    suspend fun getUser(userId: Int) = loginApi.getUser(userId)
 
     fun login(username: String, password: String): Result<LoggedInUser> {
         try {

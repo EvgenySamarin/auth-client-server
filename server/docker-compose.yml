@@ -1,0 +1,9 @@
+version: "0.1"
+
+services:
+  flask_web:
+    container_name: flask_web_container
+    build: ./app
+    ports:
+      - 4999:4999
+    restart: unless-stopped

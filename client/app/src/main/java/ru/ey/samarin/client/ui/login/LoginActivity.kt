@@ -12,13 +12,16 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.viewModels
+import dagger.hilt.android.AndroidEntryPoint
 import ru.ey.samarin.client.databinding.ActivityLoginBinding
 import ru.ey.samarin.client.ui.main.FirstFragment.Companion.ARG_LOGIN_RESULT
 import ru.ey.samarin.client.ui.main.MainActivity
 
+@AndroidEntryPoint
 class LoginActivity : AppCompatActivity() {
 
-    private lateinit var loginViewModel: LoginViewModel
+    private val loginViewModel by viewModels<LoginViewModel>()
     private lateinit var binding: ActivityLoginBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,9 +34,6 @@ class LoginActivity : AppCompatActivity() {
         val password = binding.password
         val login = binding.login
         val loading = binding.loading
-
-        loginViewModel = ViewModelProvider(this, LoginViewModelFactory())
-            .get(LoginViewModel::class.java)
 
         loginViewModel.loginFormState.observe(this@LoginActivity, Observer {
             val loginState = it ?: return@Observer
