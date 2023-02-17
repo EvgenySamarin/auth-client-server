@@ -1,125 +1,217 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import uuid
 import sqlite3
 import os
 from flask.app import Flask
 from flask.helpers import url_for, redirect, flash, abort
-from flask.globals import session, request
+from flask.globals import session, request, g
 from flask.templating import render_template
+from utils import print_debug
+from FDataBase import FDataBase
 
-DATABASE = '/tmp/flsite.db'
-DEBUG = True
-SECRET_KEY = uuid.uuid1()
-
-app = Flask(__name__)
-app.config["SECRET_KEY"] = SECRET_KEY
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_pyfile('config.py')
+app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
 
 
-main_menu = [
-    {"name": "Main", "url": "index"},
-    {"name": "Sign-In", "url": "auth"},
-    {"name": "About", "url": "about"},
-]
+def connect_db():
+    """
+    Obtain database connection
+    """
+    print_debug(application=app, message="get connection")
+    connection = sqlite3.connect(app.config['DATABASE'])
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def create_db():
+    """
+    Create database from sql scratch
+    """
+    db = connect_db()
+    with app.open_resource('sq_db.sql', mode='r') as file:
+        db.cursor().execute(file.read())
+    db.commit()
+    db.close()
+
+
+def get_db():
+    """
+    Obtain the database connection linked by request global context
+
+    :returns: database connection
+    """
+    if not hasattr(g, 'link_db'):
+        g.link_db = connect_db()
+    return g.link_db
+
+
+@app.teardown_appcontext
+def close_db(error):
+    """
+    Close database connection if it does exist, when request was complete or terminate
+    """
+    if hasattr(g, 'link_db'):
+        g.link_db.close()
+        if error:
+            print_debug(application=app, message=f"close database with error {error}")
+        else:
+            print_debug(application=app, message="close database")
 
 
 @app.route('/index')
 @app.route('/')
 def index():
     """
-    rander main page
+    Rander main page
     """
-    # debug logging
-    print(url_for('index'))
+    print_debug(application=app, message=url_for('index'))
     print("session key is " + app.config['SECRET_KEY'])
+    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'index.html',
         title="Main",
         header="Main page",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
 @app.route('/auth', methods=["POST", "GET"])
 def auth():
     """
-    render login page
+    Render login page
     """
-    # debug logging
-    print(url_for('auth'))
+    print_debug(application=app, message=url_for('auth'))
+    dbase = FDataBase(database=get_db(), application=app)
 
-    if 'userLogged' in session:
+    if is_user_login():
         return redirect(url_for('profile', username=session['userLogged']))
     elif request.method == "POST" and request.form['login'] == "user" and request.form['password'] == "1234":
         session['userLogged'] = request.form['login']
-        return redirect(url_for('profile', username=session['userLogged']))
+        res = dbase.add_auth_log(request.form['login'], request.form['password'])
+        if not res:
+            flash("Ошибка записи логов в БД", category='error')
+        else:
+            return redirect(url_for('profile', username=session['userLogged']))
 
     if request.method == "POST":
         if not request.form["login"] or not request.form["password"]:
             flash("Нечего отправлять", category='error')
         else:
-            flash("Сообщение ушло", category='success')
-        print(request.form)
+            res = dbase.add_auth_log(request.form['login'], request.form['password'])
+            if not res:
+                flash("Ошибка записи логов в БД", category='error')
+            else:
+                flash("Попытка входа записана в БД", category='success')
+        print_debug(application=app, message=request.form)
 
     return render_template(
         'auth.html',
         title="Log-in",
         header="Authorization",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
+
+
+def is_user_login() -> bool:
+    return 'userLogged' in session
 
 
 @app.route('/profile/<username>')
 def profile(username):
+    """
+    Render profile page
+
+    :param username: current username
+    """
     if 'userLogged' not in session or session['userLogged'] != username:
         abort(401)
 
-    return f"Wellcome, {username}"
+    dbase = FDataBase(database=get_db(), application=app)
+    return render_template(
+        'profile.html',
+        title="Profile",
+        header=f"Profile {username}",
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+        username=username,
+    )
+
+
+@app.route('/signout')
+def sign_out():
+    """
+    Clear user session and redirect
+    """
+    if is_user_login():
+        session.clear()
+        redirect(url_for('index'))
+    else:
+        # unexpected error sign_out must be visible only for authorized user
+        abort(500)
+    return index()
 
 
 @app.route('/about')
 def about():
     """
-    render about page
+    Render about page
     """
-    # debug logging
-    print(url_for('about'))
+    print_debug(application=app, message=url_for('about'))
+    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'about.html',
         title="About us",
         header="About site",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+    )
+
+
+@app.route('/logs')
+def logs():
+    """
+    Render database logs page
+    """
+    print_debug(application=app, message=url_for('logs'))
+    dbase = FDataBase(database=get_db(), application=app)
+
+    return render_template(
+        'logs.html',
+        title="Logs",
+        header="",
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+        logs=dbase.get_logs(),
     )
 
 
 @app.errorhandler(404)
 def page_not_found(error):
     """
-    render error page not found
+    Render error page not found
     """
-    # debug logging
-    print(error)
+    print_debug(application=app, message=error)
+    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'error.html',
         title="Page not found",
         header="Error",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 404
 
 
 @app.errorhandler(401)
 def page_not_found(error):
     """
-    render error page unauthorized
+    Render error page unauthorized
     """
-    # debug logging
-    print(error)
+    print_debug(application=app, message=error)
+    dbase = FDataBase(database=get_db(), application=app)
+
     return render_template(
         'error.html',
         title="Page not found",
         header="Unauthorized",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 401
 
 

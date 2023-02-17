@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{{ super() }}
+
+{% if logs %}
+<div>
+    {% for log in logs %}
+        <p><strong>Auth attempt with credentials:</strong> [{{log.login}}] [{{log.password}}]</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
