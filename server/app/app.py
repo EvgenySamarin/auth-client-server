@@ -59,6 +59,11 @@ def close_db(error):
             print_debug(application=app, message="close database")
 
 
+@app.before_request
+def before_request():
+    g.dbase = FDataBase(database=get_db(), application=app)
+
+
 @app.route('/index')
 @app.route('/')
 def index():
@@ -67,13 +72,12 @@ def index():
     """
     print_debug(application=app, message=url_for('index'))
     print("session key is " + app.config['SECRET_KEY'])
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'index.html',
         title="Main",
         header="Main page",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -83,13 +87,12 @@ def auth():
     Render login page
     """
     print_debug(application=app, message=url_for('auth'))
-    dbase = FDataBase(database=get_db(), application=app)
 
     if is_user_login():
         return redirect(url_for('profile', username=session['userLogged']))
     elif request.method == "POST" and request.form['login'] == "user" and request.form['password'] == "1234":
         session['userLogged'] = request.form['login']
-        res = dbase.add_auth_log(request.form['login'], request.form['password'])
+        res = g.dbase.add_auth_log(request.form['login'], request.form['password'])
         if not res:
             flash("Ошибка записи логов в БД", category='error')
         else:
@@ -99,7 +102,7 @@ def auth():
         if not request.form["login"] or not request.form["password"]:
             flash("Нечего отправлять", category='error')
         else:
-            res = dbase.add_auth_log(request.form['login'], request.form['password'])
+            res = g.dbase.add_auth_log(request.form['login'], request.form['password'])
             if not res:
                 flash("Ошибка записи логов в БД", category='error')
             else:
@@ -110,7 +113,7 @@ def auth():
         'auth.html',
         title="Log-in",
         header="Authorization",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -128,12 +131,11 @@ def profile(username):
     if 'userLogged' not in session or session['userLogged'] != username:
         abort(401)
 
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'profile.html',
         title="Profile",
         header=f"Profile {username}",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
         username=username,
     )
 
@@ -158,12 +160,11 @@ def about():
     Render about page
     """
     print_debug(application=app, message=url_for('about'))
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'about.html',
         title="About us",
         header="About site",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -173,14 +174,13 @@ def logs():
     Render database logs page
     """
     print_debug(application=app, message=url_for('logs'))
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'logs.html',
         title="Logs",
         header="",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
-        logs=dbase.get_logs(),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        logs=g.dbase.get_logs(),
     )
 
 
@@ -190,12 +190,11 @@ def page_not_found(error):
     Render error page not found
     """
     print_debug(application=app, message=error)
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'error.html',
         title="Page not found",
         header="Error",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
     ), 404
 
 
@@ -205,13 +204,12 @@ def page_not_found(error):
     Render error page unauthorized
     """
     print_debug(application=app, message=error)
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'error.html',
         title="Page not found",
         header="Unauthorized",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=g.dbase.get_menu(is_user_login=is_user_login()),
     ), 401
 
 
