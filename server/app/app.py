@@ -12,6 +12,7 @@ from FDataBase import FDataBase
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile('config.py')
 app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
+dbase: FDataBase
 
 
 def connect_db():
@@ -61,7 +62,8 @@ def close_db(error):
 
 @app.before_request
 def before_request():
-    g.dbase = FDataBase(database=get_db(), application=app)
+    global dbase
+    dbase = FDataBase(database=get_db(), application=app)
 
 
 @app.route('/index')
@@ -77,7 +79,7 @@ def index():
         'index.html',
         title="Main",
         header="Main page",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -92,7 +94,7 @@ def auth():
         return redirect(url_for('profile', username=session['userLogged']))
     elif request.method == "POST" and request.form['login'] == "user" and request.form['password'] == "1234":
         session['userLogged'] = request.form['login']
-        res = g.dbase.add_auth_log(request.form['login'], request.form['password'])
+        res = dbase.add_auth_log(request.form['login'], request.form['password'])
         if not res:
             flash("Ошибка записи логов в БД", category='error')
         else:
@@ -102,7 +104,7 @@ def auth():
         if not request.form["login"] or not request.form["password"]:
             flash("Нечего отправлять", category='error')
         else:
-            res = g.dbase.add_auth_log(request.form['login'], request.form['password'])
+            res = dbase.add_auth_log(request.form['login'], request.form['password'])
             if not res:
                 flash("Ошибка записи логов в БД", category='error')
             else:
@@ -113,7 +115,7 @@ def auth():
         'auth.html',
         title="Log-in",
         header="Authorization",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -135,7 +137,7 @@ def profile(username):
         'profile.html',
         title="Profile",
         header=f"Profile {username}",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
         username=username,
     )
 
@@ -164,7 +166,7 @@ def about():
         'about.html',
         title="About us",
         header="About site",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -179,8 +181,8 @@ def logs():
         'logs.html',
         title="Logs",
         header="",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
-        logs=g.dbase.get_logs(),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+        logs=dbase.get_logs(),
     )
 
 
@@ -194,7 +196,7 @@ def page_not_found(error):
         'error.html',
         title="Page not found",
         header="Error",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 404
 
 
@@ -209,7 +211,7 @@ def page_not_found(error):
         'error.html',
         title="Page not found",
         header="Unauthorized",
-        menu=g.dbase.get_menu(is_user_login=is_user_login()),
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 401
 
 
