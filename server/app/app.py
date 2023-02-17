@@ -1,20 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import uuid
 import sqlite3
 import os
 from flask.app import Flask
 from flask.helpers import url_for, redirect, flash, abort
-from flask.globals import session, request
+from flask.globals import session, request, g
 from flask.templating import render_template
+from utils import print_debug
 
-DATABASE = '/tmp/flsite.db'
-DEBUG = True
-SECRET_KEY = uuid.uuid1()
-
-app = Flask(__name__)
-app.config["SECRET_KEY"] = SECRET_KEY
-
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_pyfile('config.py')
+app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
 
 main_menu = [
     {"name": "Main", "url": "index"},
@@ -23,31 +19,62 @@ main_menu = [
 ]
 
 
+def connect_db():
+    """
+    Obtain database connection
+    """
+    print_debug(application=app, message="get connection")
+    connection = sqlite3.connect(app.config['DATABASE'])
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def create_db():
+    """
+    Create database from sql scratch
+    """
+    db = connect_db()
+    with app.open_resource('sq_db.sql', mode='r') as file:
+        db.cursor().execute(file.read())
+    db.commit()
+    db.close()
+
+
+def get_db():
+    """
+    Obtain the database connection linked by request global context
+
+    :returns: database connection
+    """
+    if not hasattr(g, 'link_db'):
+        g.link_db = connect_db()
+    return g.link_db
+
+
 @app.route('/index')
 @app.route('/')
 def index():
     """
-    rander main page
+    Rander main page
     """
-    # debug logging
-    print(url_for('index'))
+    print_debug(application=app, message=url_for('index'))
     print("session key is " + app.config['SECRET_KEY'])
+    db = get_db()
 
     return render_template(
         'index.html',
         title="Main",
         header="Main page",
-        menu=main_menu,
+        menu=[],
     )
 
 
 @app.route('/auth', methods=["POST", "GET"])
 def auth():
     """
-    render login page
+    Render login page
     """
-    # debug logging
-    print(url_for('auth'))
+    print_debug(application=app, message=url_for('auth'))
 
     if 'userLogged' in session:
         return redirect(url_for('profile', username=session['userLogged']))
@@ -60,7 +87,7 @@ def auth():
             flash("Нечего отправлять", category='error')
         else:
             flash("Сообщение ушло", category='success')
-        print(request.form)
+        print_debug(application=app, message=request.form)
 
     return render_template(
         'auth.html',
@@ -72,6 +99,11 @@ def auth():
 
 @app.route('/profile/<username>')
 def profile(username):
+    """
+    Render profile page
+
+    :param username: current username
+    """
     if 'userLogged' not in session or session['userLogged'] != username:
         abort(401)
 
@@ -81,10 +113,9 @@ def profile(username):
 @app.route('/about')
 def about():
     """
-    render about page
+    Render about page
     """
-    # debug logging
-    print(url_for('about'))
+    print_debug(application=app, message=url_for('about'))
     return render_template(
         'about.html',
         title="About us",
@@ -96,10 +127,9 @@ def about():
 @app.errorhandler(404)
 def page_not_found(error):
     """
-    render error page not found
+    Render error page not found
     """
-    # debug logging
-    print(error)
+    print_debug(application=app, message=error)
     return render_template(
         'error.html',
         title="Page not found",
@@ -111,10 +141,9 @@ def page_not_found(error):
 @app.errorhandler(401)
 def page_not_found(error):
     """
-    render error page unauthorized
+    Render error page unauthorized
     """
-    # debug logging
-    print(error)
+    print_debug(application=app, message=error)
     return render_template(
         'error.html',
         title="Page not found",
