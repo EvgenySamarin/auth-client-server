@@ -1,0 +1,11 @@
+version: "0.2"
+
+services:
+#simple web application for sandbox playing
+  flask_web:
+    container_name: flask_web_container
+    build: ./app
+    ports:
+      #workaround flask ports for macOS
+      - 4999:4999
+    restart: unless-stopped
