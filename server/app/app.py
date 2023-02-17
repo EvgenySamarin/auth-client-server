@@ -7,16 +7,11 @@ from flask.helpers import url_for, redirect, flash, abort
 from flask.globals import session, request, g
 from flask.templating import render_template
 from utils import print_debug
+from FDataBase import FDataBase
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile('config.py')
 app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
-
-main_menu = [
-    {"name": "Main", "url": "index"},
-    {"name": "Sign-In", "url": "auth"},
-    {"name": "About", "url": "about"},
-]
 
 
 def connect_db():
@@ -51,6 +46,19 @@ def get_db():
     return g.link_db
 
 
+@app.teardown_appcontext
+def close_db(error):
+    """
+    Close database connection if it does exist, when request was complete or terminate
+    """
+    if hasattr(g, 'link_db'):
+        g.link_db.close()
+        if error:
+            print_debug(application=app, message=f"close database with error {error}")
+        else:
+            print_debug(application=app, message="close database")
+
+
 @app.route('/index')
 @app.route('/')
 def index():
@@ -59,13 +67,13 @@ def index():
     """
     print_debug(application=app, message=url_for('index'))
     print("session key is " + app.config['SECRET_KEY'])
-    db = get_db()
+    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'index.html',
         title="Main",
         header="Main page",
-        menu=[],
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
 
 
@@ -75,26 +83,39 @@ def auth():
     Render login page
     """
     print_debug(application=app, message=url_for('auth'))
+    dbase = FDataBase(database=get_db(), application=app)
 
-    if 'userLogged' in session:
+    if is_user_login():
         return redirect(url_for('profile', username=session['userLogged']))
     elif request.method == "POST" and request.form['login'] == "user" and request.form['password'] == "1234":
         session['userLogged'] = request.form['login']
-        return redirect(url_for('profile', username=session['userLogged']))
+        res = dbase.add_auth_log(request.form['login'], request.form['password'])
+        if not res:
+            flash("Ошибка записи логов в БД", category='error')
+        else:
+            return redirect(url_for('profile', username=session['userLogged']))
 
     if request.method == "POST":
         if not request.form["login"] or not request.form["password"]:
             flash("Нечего отправлять", category='error')
         else:
-            flash("Сообщение ушло", category='success')
+            res = dbase.add_auth_log(request.form['login'], request.form['password'])
+            if not res:
+                flash("Ошибка записи логов в БД", category='error')
+            else:
+                flash("Попытка входа записана в БД", category='success')
         print_debug(application=app, message=request.form)
 
     return render_template(
         'auth.html',
         title="Log-in",
         header="Authorization",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     )
+
+
+def is_user_login() -> bool:
+    return 'userLogged' in session
 
 
 @app.route('/profile/<username>')
@@ -107,7 +128,28 @@ def profile(username):
     if 'userLogged' not in session or session['userLogged'] != username:
         abort(401)
 
-    return f"Wellcome, {username}"
+    dbase = FDataBase(database=get_db(), application=app)
+    return render_template(
+        'profile.html',
+        title="Profile",
+        header=f"Profile {username}",
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+        username=username,
+    )
+
+
+@app.route('/signout')
+def sign_out():
+    """
+    Clear user session and redirect
+    """
+    if is_user_login():
+        session.clear()
+        redirect(url_for('index'))
+    else:
+        # unexpected error sign_out must be visible only for authorized user
+        abort(500)
+    return index()
 
 
 @app.route('/about')
@@ -116,11 +158,29 @@ def about():
     Render about page
     """
     print_debug(application=app, message=url_for('about'))
+    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'about.html',
         title="About us",
         header="About site",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+    )
+
+
+@app.route('/logs')
+def logs():
+    """
+    Render database logs page
+    """
+    print_debug(application=app, message=url_for('logs'))
+    dbase = FDataBase(database=get_db(), application=app)
+
+    return render_template(
+        'logs.html',
+        title="Logs",
+        header="",
+        menu=dbase.get_menu(is_user_login=is_user_login()),
+        logs=dbase.get_logs(),
     )
 
 
@@ -130,11 +190,12 @@ def page_not_found(error):
     Render error page not found
     """
     print_debug(application=app, message=error)
+    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'error.html',
         title="Page not found",
         header="Error",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 404
 
 
@@ -144,11 +205,13 @@ def page_not_found(error):
     Render error page unauthorized
     """
     print_debug(application=app, message=error)
+    dbase = FDataBase(database=get_db(), application=app)
+
     return render_template(
         'error.html',
         title="Page not found",
         header="Unauthorized",
-        menu=main_menu,
+        menu=dbase.get_menu(is_user_login=is_user_login()),
     ), 401
 
 
