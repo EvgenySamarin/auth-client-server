@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, url_for, request
+import uuid
+from flask import Flask, render_template, url_for, request, flash
+
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = f"{uuid.uuid1()}"
 
 main_menu = [
     {"name": "Sign-In", "url": "index"},
@@ -19,8 +22,13 @@ def index():
     """
     # debug logging
     print(url_for('index'))
+    print("session key is " + app.config['SECRET_KEY'])
 
     if request.method == "POST":
+        if not request.form["login"] or not request.form["password"]:
+            flash("Нечего отправлять", category='error')
+        else:
+            flash("Сообщение ушло", category='success')
         print(request.form)
 
     return render_template(
@@ -44,6 +52,21 @@ def about():
         header="About site",
         menu=main_menu,
     )
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    """
+    render error page
+    """
+    # debug logging
+    print(error)
+    return render_template(
+        'pageNotFound.html',
+        title="Page not found",
+        header="Error",
+        menu=main_menu,
+    ), 404
 
 
 if __name__ == '__main__':

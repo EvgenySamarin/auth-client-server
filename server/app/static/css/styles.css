@@ -86,4 +86,14 @@ div .form {
 
 .flash {
     padding: 10px;
+    color: black;
+}
+
+.flash.success {
+    border: 1px solid green;
+    background: #AEFFC5;
+}
+.flash.error {
+    border: 1px solid red;
+    background: #FF9C9C;
 }
