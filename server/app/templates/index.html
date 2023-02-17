@@ -2,28 +2,6 @@
 
 {% block content %}
 {{ super() }}
-<div class="form" align="center">
-    <form action="/auth" method="post" class="form-auth">
-        {% for cat, msg in get_flashed_messages(True) %}
-        <div class="flash {{cat}}">{{msg}}</div>
-        {% endfor %}
-        <p><label>Login: </label> <input type="text" name="login"/>
-        <p><label>Password: </label> <input type="password" name="password"/>
-        <p><input type="submit" value="Войти"/>
-        <div id="g_id_onload"
-             data-client_id="YOUR_GOOGLE_CLIENT_ID"
-             data-login_uri="https://your.domain/your_login_endpoint"
-             data-auto_prompt="false">
-        </div>
-        <div class="g_id_signin"
-             data-type="standard"
-             data-size="medium"
-             data-theme="filled_black"
-             data-text="signup_with"
-             data-shape="rectangular"
-             data-logo_alignment="left">
-        </div>
-    </form>
-</div>
+<p>Main page for testing Flask and OAuth methods.</p>
 
 {% endblock %}
