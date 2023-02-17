@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import uuid
+import sqlite3
+import os
 from flask.app import Flask
 from flask.helpers import url_for, redirect, flash, abort
 from flask.globals import session, request
 from flask.templating import render_template
 
+DATABASE = '/tmp/flsite.db'
+DEBUG = True
+SECRET_KEY = uuid.uuid1()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = f"{uuid.uuid1()}"
+app.config["SECRET_KEY"] = SECRET_KEY
 
 
 main_menu = [
