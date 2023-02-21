@@ -1,18 +1,45 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sqlite3
-import os
-from flask.app import Flask
+from datetime import datetime
+from flask import Flask
 from flask.helpers import url_for, redirect, flash, abort
 from flask.globals import session, request, g
 from flask.templating import render_template
 from utils import print_debug
 from FDataBase import FDataBase
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile('config.py')
-app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
+
+# connect app to SQLAlchemy SQLite
+alch_database = SQLAlchemy(app)
 dbase: FDataBase
+
+
+class Users(alch_database.Model):
+    """ User storage class to save data into SQLAlchemy's table the same name """
+    id = alch_database.Column(alch_database.Integer, primary_key=True)
+    email = alch_database.Column(alch_database.String(50), unique=True)
+    psw = alch_database.Column(alch_database.String(500), nullable=True)
+    date = alch_database.Column(alch_database.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<users {self.id}, {self.email}, {self.psw}, {self.date}>"
+
+
+class Profiles(alch_database.Model):
+    """ Profile storage class to save data into SQLAlchemy's table the same name """
+    id = alch_database.Column(alch_database.Integer, primary_key=True)
+    name = alch_database.Column(alch_database.String(50), nullable=True)
+    old = alch_database.Column(alch_database.Integer)
+    city = alch_database.Column(alch_database.String(100))
+
+    user_id = alch_database.Column(alch_database.Integer, alch_database.ForeignKey('users.id'))
+
+    def __repr__(self):
+        return f"<profiles {self.id}>"
 
 
 def connect_db():
@@ -216,4 +243,5 @@ def page_not_found(error):
 
 
 if __name__ == '__main__':
+    alch_database.create_all()
     app.run(debug=True, host="0.0.0.0", port=4999)
