@@ -1,62 +1,71 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sqlite3
-import os
-from flask.app import Flask
+from datetime import datetime
+from flask import Flask
 from flask.helpers import url_for, redirect, flash, abort
-from flask.globals import session, request, g
+from flask.globals import session, request
 from flask.templating import render_template
+from werkzeug.security import generate_password_hash
+
 from utils import print_debug
-from FDataBase import FDataBase
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_pyfile('config.py')
-app.config.update(dict(DATABASE=os.path.join(app.root_path, 'flsite.db')))
+
+# connect app to SQLAlchemy SQLite
+alchemy_database = SQLAlchemy(app)
 
 
-def connect_db():
-    """
-    Obtain database connection
-    """
-    print_debug(application=app, message="get connection")
-    connection = sqlite3.connect(app.config['DATABASE'])
-    connection.row_factory = sqlite3.Row
-    return connection
+class Users(alchemy_database.Model):
+    """ User storage class to save data into SQLAlchemy's table the same name """
+    id = alchemy_database.Column(alchemy_database.Integer, primary_key=True)
+    login = alchemy_database.Column(alchemy_database.String(50), unique=True)
+    email = alchemy_database.Column(alchemy_database.String(50), unique=True)
+    psw = alchemy_database.Column(alchemy_database.String(500), nullable=True)
+    date = alchemy_database.Column(alchemy_database.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<users {self.id}, {self.email}, {self.psw}, {self.date}>"
 
 
-def create_db():
-    """
-    Create database from sql scratch
-    """
-    db = connect_db()
-    with app.open_resource('sq_db.sql', mode='r') as file:
-        db.cursor().execute(file.read())
-    db.commit()
-    db.close()
+class Profiles(alchemy_database.Model):
+    """ Profile storage class to save data into SQLAlchemy's table the same name """
+    id = alchemy_database.Column(alchemy_database.Integer, primary_key=True)
+    name = alchemy_database.Column(alchemy_database.String(50), nullable=True)
+    old = alchemy_database.Column(alchemy_database.Integer)
+    city = alchemy_database.Column(alchemy_database.String(100))
+
+    user_id = alchemy_database.Column(alchemy_database.Integer, alchemy_database.ForeignKey('users.id'))
+
+    def __repr__(self):
+        return f"<profiles {self.id}>"
 
 
-def get_db():
-    """
-    Obtain the database connection linked by request global context
+class Mainmenu(alchemy_database.Model):
+    """ Mainmenu storage class to save data into SQLAlchemy's table the same name """
+    id = alchemy_database.Column(alchemy_database.Integer, primary_key=True)
+    title = alchemy_database.Column(alchemy_database.String(50), unique=True)
+    url = alchemy_database.Column(alchemy_database.String(50), nullable=True)
 
-    :returns: database connection
-    """
-    if not hasattr(g, 'link_db'):
-        g.link_db = connect_db()
-    return g.link_db
+    def __repr__(self):
+        return f"<mainmenu {self.id}>"
 
 
-@app.teardown_appcontext
-def close_db(error):
-    """
-    Close database connection if it does exist, when request was complete or terminate
-    """
-    if hasattr(g, 'link_db'):
-        g.link_db.close()
-        if error:
-            print_debug(application=app, message=f"close database with error {error}")
-        else:
-            print_debug(application=app, message="close database")
+def fill_mainmenu():
+    alchemy_database.session.add(Mainmenu(title="Main", url="/index"))
+    alchemy_database.session.add(Mainmenu(title="Sign-In", url="/auth"))
+    alchemy_database.session.add(Mainmenu(title="About", url="/about"))
+    alchemy_database.session.add(Mainmenu(title="Auth-logs", url="/logs"))
+    alchemy_database.session.add(Mainmenu(title="Sign-out", url="/signout"))
+    alchemy_database.session.commit()
+
+
+def get_menu():
+    if is_user_login():
+        return Mainmenu.query.all()
+    else:
+        return Mainmenu.query.filter(Mainmenu.url != "/signout").all()
 
 
 @app.route('/index')
@@ -67,13 +76,12 @@ def index():
     """
     print_debug(application=app, message=url_for('index'))
     print("session key is " + app.config['SECRET_KEY'])
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'index.html',
         title="Main",
         header="Main page",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
     )
 
 
@@ -83,34 +91,44 @@ def auth():
     Render login page
     """
     print_debug(application=app, message=url_for('auth'))
-    dbase = FDataBase(database=get_db(), application=app)
 
     if is_user_login():
         return redirect(url_for('profile', username=session['userLogged']))
     elif request.method == "POST" and request.form['login'] == "user" and request.form['password'] == "1234":
         session['userLogged'] = request.form['login']
-        res = dbase.add_auth_log(request.form['login'], request.form['password'])
-        if not res:
-            flash("Ошибка записи логов в БД", category='error')
-        else:
+
+        try:
+            hash_psw = generate_password_hash(request.form['password'])
+            new_row = Users(login=request.form['login'], psw=hash_psw)
+            alchemy_database.session.add(new_row)
+            # flush needed to use new appended table row in other request. Here just for example
+            alchemy_database.session.flush()
+            alchemy_database.session.commit()
             return redirect(url_for('profile', username=session['userLogged']))
+        except:
+            alchemy_database.session.rollback()
+            flash("Ошибка записи логов в БД", category='error')
 
     if request.method == "POST":
         if not request.form["login"] or not request.form["password"]:
             flash("Нечего отправлять", category='error')
         else:
-            res = dbase.add_auth_log(request.form['login'], request.form['password'])
-            if not res:
-                flash("Ошибка записи логов в БД", category='error')
-            else:
+            try:
+                hash_psw = generate_password_hash(request.form['password'])
+                new_row = Users(login=request.form['login'], psw=hash_psw)
+                alchemy_database.session.add(new_row)
+                alchemy_database.session.commit()
                 flash("Попытка входа записана в БД", category='success')
+            except:
+                alchemy_database.session.rollback()
+                flash("Ошибка записи логов в БД", category='error')
         print_debug(application=app, message=request.form)
 
     return render_template(
         'auth.html',
         title="Log-in",
         header="Authorization",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
     )
 
 
@@ -128,12 +146,11 @@ def profile(username):
     if 'userLogged' not in session or session['userLogged'] != username:
         abort(401)
 
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'profile.html',
         title="Profile",
         header=f"Profile {username}",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
         username=username,
     )
 
@@ -158,12 +175,11 @@ def about():
     Render about page
     """
     print_debug(application=app, message=url_for('about'))
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'about.html',
         title="About us",
         header="About site",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
     )
 
 
@@ -173,14 +189,13 @@ def logs():
     Render database logs page
     """
     print_debug(application=app, message=url_for('logs'))
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'logs.html',
         title="Logs",
         header="",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
-        logs=dbase.get_logs(),
+        menu=get_menu(),
+        logs=Users.query.all(),
     )
 
 
@@ -190,12 +205,11 @@ def page_not_found(error):
     Render error page not found
     """
     print_debug(application=app, message=error)
-    dbase = FDataBase(database=get_db(), application=app)
     return render_template(
         'error.html',
         title="Page not found",
         header="Error",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
     ), 404
 
 
@@ -205,15 +219,19 @@ def page_not_found(error):
     Render error page unauthorized
     """
     print_debug(application=app, message=error)
-    dbase = FDataBase(database=get_db(), application=app)
 
     return render_template(
         'error.html',
         title="Page not found",
         header="Unauthorized",
-        menu=dbase.get_menu(is_user_login=is_user_login()),
+        menu=get_menu(),
     ), 401
 
 
 if __name__ == '__main__':
+    # create SQLAlchemy database and fill Mainmenu if needed
+    with app.app_context():
+        alchemy_database.create_all()
+        if len(Mainmenu.query.all()) == 0:
+            fill_mainmenu()
     app.run(debug=True, host="0.0.0.0", port=4999)
